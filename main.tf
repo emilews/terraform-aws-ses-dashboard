@@ -55,7 +55,7 @@ resource "aws_sns_topic_subscription" "email_delivery_queue_topic_subscription" 
 
 resource "aws_s3_bucket" "dashboard_bucket" {
   bucket = local.bucket_name
-  acl    = "private"
+  acl    = "BucketOwnerPreferred"
 
   lifecycle_rule {
     id      = "retention"

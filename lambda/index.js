@@ -103,13 +103,13 @@ AWS SES Email Dashboard.
         });
     }
     
-    function row(type,btype,bsubtype,sender,destination,diagcode,time,id) {
+    function row(type,btype,bsubtype,sender,destination,diagcode,smtpResponse,time,id) {
         var otr = "<tr>";
         var ftr = "</tr>";
         var oline = "<td>";
         var cline = "</td>";
 
-        return otr + oline + type + cline + oline + btype + cline + oline + bsubtype + cline + oline + sender + cline + oline + destination + cline + oline + diagcode + cline + oline + time + cline + oline + id + cline + ftr;
+        return otr + oline + type + cline + oline + btype + cline + oline + bsubtype + cline + oline + sender + cline + oline + destination + cline + oline + diagcode + cline + oline + smtpResponse + cline + oline + time + cline + oline + id + cline + ftr;
     }
 
     //Start Receive message
@@ -121,6 +121,7 @@ AWS SES Email Dashboard.
         }
 
         var messages = [];
+        var msgDelivery = [];
         var msgBouncePerm = [];
         var msgSuppres = [];
         var msgBounceTrans = [];
@@ -143,12 +144,10 @@ AWS SES Email Dashboard.
                         var type = msg.notificationType;
                         var time = msg.mail.timestamp;
                         var id = msg.mail.messageId;
+                        var smtpResponse = null;
                         var btype = null;
                         var bsubtype = null;
                         var diagcode = null;
-    
-                        //console.log(msg);
-
     
                         if (type == "Bounce") {
                             btype = msg.bounce.bounceType; // Permanent || Transient
@@ -156,46 +155,50 @@ AWS SES Email Dashboard.
                             if (btype == "Permanent" && bsubtype == "Suppressed") {
                                 diagcode = "Suppressed by SES";
                                 msg.bounce.bouncedRecipients.forEach((recipient) => {
-                                    text = row(type,btype,bsubtype,sender,recipient.emailAddress,diagcode,time,id);
+                                    text = row(type,btype,bsubtype,sender,recipient.emailAddress,diagcode,null,time,id);
                                     msgSuppres.push(text);
                                 });
                             } else if (btype == "Permanent" && bsubtype == "General") {
                                 msg.bounce.bouncedRecipients.forEach((recipient) => {
                                     diagcode = recipient.diagnosticCode;
-                                    text = row(type,btype,bsubtype,sender,recipient.emailAddress,diagcode,time,id);
+                                    text = row(type,btype,bsubtype,sender,recipient.emailAddress,diagcode,null,time,id);
+                                    consol
                                     msgBouncePerm.push(text);
                                 });
                             } else if (btype == "Permanent" && bsubtype == "NoEmail") {
                                 diagcode = msg.bounce.bouncedRecipients[0].diagnosticCode;
-                                text =row(type,btype,bsubtype,sender,destination,diagcode,time,id);
+                                text =row(type,btype,bsubtype,sender,destination,diagcode,null,time,id);
                                 msgBouncePerm.push(text);
     
                             } else if (btype == "Undetermined") {
                                 diagcode = msg.bounce.bouncedRecipients[0].diagnosticCode;
-                                text = row(type,btype,bsubtype,sender,destination,diagcode,time,id);
+                                text = row(type,btype,bsubtype,sender,destination,diagcode,null,time,id);
                                 msgBouncePerm.push(text);
     
                             } else if (btype == "Transient") {
                                 diagcode = "soft-Bounce";
                                 msg.bounce.bouncedRecipients.forEach((recipient) => {
-                                    text = row(type,btype,bsubtype,sender,recipient.emailAddress,diagcode,time,id);
+                                    text = row(type,btype,bsubtype,sender,recipient.emailAddress,diagcode,null,time,id);
                                     msgBounceTrans.push(text);
                                 });
                             } else {
                                 console.log("it's an unknown bounce");
                                 diagcode = "unknown";
-                                text = row(type,btype,bsubtype,sender,destination,diagcode,time,id);
+                                text = row(type,btype,bsubtype,sender,destination,diagcode,null,time,id);
                                 msgBouncePerm.push(text);
                             }
     
                         } else if (type == "Delivery") {
-                            console.log("Delivery notification not supported");
+                            diagcode = "delivered";
+                            smtpResponse = msg.delivery.smtpResponse;
+                            text =row(type,btype,bsubtype,sender,destination,diagcode,smtpResponse,time,id);
+                            msgDelivery.push(text);
     
                         } else if (type == "Complaint") {
                             btype = "null";
                             bsubtype = "null";
                             diagcode = "null";
-                            text = row(type,btype,bsubtype,sender,destination,diagcode,time,id);
+                            text = row(type,btype,bsubtype,sender,destination,diagcode,null,time,id);
     
                             msgComplaint.push(text);
     
@@ -211,21 +214,19 @@ AWS SES Email Dashboard.
                     messages.push(i);
 
                     deleteMessage(message);
-                    //console.log("Array size = " + messages.length + " with queue size = " + queueSize);
 
                     if (messages.length == queueSize) {
-
+                        var dl = msgDelivery.join('');
                         var bp = msgBouncePerm.join('');
                         var sp = msgSuppres.join('');
                         var bt = msgBounceTrans.join('');
                         var cp = msgComplaint.join('');
                         var begin = fs.readFileSync('template/begin.html', 'utf8');
-                        var middle = bp + sp + bt + cp;
+                        var middle = dl + bp + sp + bt + cp;
                         var end = fs.readFileSync('template/end.html', 'utf8');
                         content = begin + middle + end;
                         messageCount = messages.length;
                         s3upload();
-
                     }
                 } else {
                     console.log("data without messages.");
